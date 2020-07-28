@@ -29,6 +29,6 @@ public interface IWorker<T, V> {
      * @param object      object
      * @param allWrappers 任务包装
      */
-    public void action(T object, Map<String, WorkerWrapper> allWrappers);
+    public V action(T object, Map<String, WorkerWrapper> allWrappers);
 
 }
