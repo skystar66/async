@@ -10,10 +10,7 @@ import com.xuliang.framework.async.worker.ResultState;
 import com.xuliang.framework.async.worker.WorkResult;
 
 import javax.print.attribute.standard.NumberUp;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -121,6 +118,12 @@ public class WorkerWrapper<T, V> {
     }
 
     public void work(ThreadPoolExecutor threadPoolExecutor, long timeout, Map<String, WorkerWrapper> forParamUseWrappers) {
+        try {
+            work(threadPoolExecutor, null, timeout, forParamUseWrappers);
+        } catch (Exception ex) {
+
+            ex.printStackTrace();
+        }
 
     }
 
@@ -139,6 +142,14 @@ public class WorkerWrapper<T, V> {
             beginNext(threadPoolExecutor, now, timeout);
             return;
         }
+
+        /**如果自己已经执行过了。
+         可能有多个依赖，其中的一个依赖已经执行完了，并且自己也已开始执行或执行完毕。当另一个依赖执行完毕，又进来该方法时，就不重复处理了*/
+        if (getState() == FINISH || getState() == ERROR) {
+            System.out.println(">>>>>>>> 当前任务状态等于完成或失败 : " + getState() + " <<<<<<<<");
+            beginNext(threadPoolExecutor, now, timeout);
+            return;
+        }
         /**如果在执行前 需要校验一下nextWrapper的状态*/
         if (needCheckNextWrapperResult) {
             /**如果练上已经有任务执行完成啦，自己就不用执行啦,执行下一个*/
@@ -152,7 +163,7 @@ public class WorkerWrapper<T, V> {
 
         /**如果没有任何依赖，说明自己就是第一批执行的*/
         if (dependWrappers == null || dependWrappers.size() == 0) {
-            System.out.println("=== 没有任何依赖 继续执行 " + Thread.currentThread().getName() + " ===");
+            System.out.println("=== 没有任何依赖 继续执行 time:" + SystemClock.now() + " " + Thread.currentThread().getName() + " ===");
             fire();
             beginNext(threadPoolExecutor, now, timeout);
             return;
@@ -167,7 +178,7 @@ public class WorkerWrapper<T, V> {
          *
          * */
         if (dependWrappers.size() == 1) {
-            System.out.println("===  存在依赖只有一个job 当前线程：" + Thread.currentThread().getName() + " === ");
+            System.out.println("===  存在依赖只有一个job time:" + SystemClock.now() + " 当前线程：" + Thread.currentThread().getName() + " === ");
             /**有一个依赖时*/
             doDependsOneJob(fromWrapper);
             /**前面的任务正常执行完毕，执行自己的任务*/
@@ -175,7 +186,6 @@ public class WorkerWrapper<T, V> {
             /**执行下一个任务*/
             beginNext(threadPoolExecutor, now, timeout);
         } else {
-            System.out.println("===  存在多个依赖job 当前线程：" + Thread.currentThread().getName() + " ===");
             /**有多个依赖时*/
             doDependsJobs(threadPoolExecutor, dependWrappers, fromWrapper, now, timeout);
         }
@@ -200,7 +210,7 @@ public class WorkerWrapper<T, V> {
      */
     private void fire() {
         //阻塞取结果
-        System.out.println("=== 阻塞取结果 " + Thread.currentThread().getName() + " ===");
+        System.out.println("=== time:" + SystemClock.now() + " 阻塞取结果 " + Thread.currentThread().getName() + " ===");
         workResult = workerDoJob();
     }
 
@@ -233,8 +243,8 @@ public class WorkerWrapper<T, V> {
 
             workResult.setResultState(ResultState.SUCCESS);
             workResult.setResult(resultValue);
-
-
+            /**回调成功*/
+            callback.call(true, param, workResult);
             return workResult;
         } catch (Exception ex) {
             /**避免重复回调*/
@@ -245,7 +255,6 @@ public class WorkerWrapper<T, V> {
             fastFail(WORKING, null);
             return workResult;
         }
-
     }
 
 
@@ -257,10 +266,10 @@ public class WorkerWrapper<T, V> {
      * @param timeout            超时时间
      */
     private void beginNext(ThreadPoolExecutor threadPoolExecutor, long now, long timeout) {
-        System.out.println("=== 进行下一个任务 " + Thread.currentThread().getName() + " ===");
+        System.out.println("=== time:" + SystemClock.now() + " 进行下一个任务 " + Thread.currentThread().getName() + " ===");
         /**耗时时间*/
         long costtime = SystemClock.now() - now;
-        System.out.println("=== 耗时 costtime: " + costtime + " ms , timeout:"
+        System.out.println("===  time:" + SystemClock.now() + " 耗时 costtime: " + costtime + " ms , timeout:"
                 + (timeout - costtime) + " ms");
         if (nextWrappers == null) {
             return;
@@ -269,12 +278,13 @@ public class WorkerWrapper<T, V> {
         if (nextWrappers.size() == 1) {
             nextWrappers.get(0).work(threadPoolExecutor, WorkerWrapper.this,
                     timeout - costtime, forParamUseWrappers);
+            return;
         }
         /**当调用链有多个时，进行并发执行*/
         CompletableFuture[] futures = new CompletableFuture[nextWrappers.size()];
         for (int i = 0; i < nextWrappers.size(); i++) {
             int finalI = i;
-            CompletableFuture.runAsync(() -> nextWrappers.get(finalI).work(threadPoolExecutor, WorkerWrapper.this
+            futures[i] = CompletableFuture.runAsync(() -> nextWrappers.get(finalI).work(threadPoolExecutor, WorkerWrapper.this
                     , timeout - costtime, forParamUseWrappers), threadPoolExecutor);
         }
         try {
@@ -292,18 +302,14 @@ public class WorkerWrapper<T, V> {
         if (!compareAndSetState(newVal, ERROR)) {
             return false;
         }
-
         /**处理尚未处理过的结果*/
         if (checkIsNullResult()) {
-
             if (e == null) {
                 workResult = defaultResult();
             } else {
                 workResult = defaultExResult(e);
             }
-
         }
-
         callback.call(false, param, workResult);
         return true;
     }
@@ -313,7 +319,7 @@ public class WorkerWrapper<T, V> {
      * 处理只有一个依赖的任务
      */
     private void doDependsOneJob(WorkerWrapper dependWrapper) {
-        System.out.println("=== 当前 dependWrapper 状态: " + dependWrapper.getWorkResult().getResultState() + "");
+        System.out.println("=== 当前 time:" + SystemClock.now() + " dependWrapper 状态: " + dependWrapper.getWorkResult().getResultState() + "");
         /**校验依赖的 workerwrapper 是否执行完毕*/
         if (ResultState.TIMEOUT == dependWrapper.getWorkResult().getResultState()) {
             workResult = defaultResult();
@@ -339,6 +345,8 @@ public class WorkerWrapper<T, V> {
      */
     private synchronized void doDependsJobs(ThreadPoolExecutor threadPoolExecutor, List<DependWrapper> dependWrappers,
                                             WorkerWrapper fromWrapper, long now, long timeout) {
+        System.out.println("===  存在多个依赖job time:" + SystemClock.now() + " 当前线程：" + Thread.currentThread().getName() + " ===");
+
         boolean nowDepandIsMust = false;
         /**创建必须完成上有的wrapper集合*/
         Set<DependWrapper> mustWrapper = new HashSet<>();
@@ -358,8 +366,10 @@ public class WorkerWrapper<T, V> {
             if (ResultState.TIMEOUT == fromWrapper.getWorkResult().getResultState()) {
                 fastFail(INIT, null);
             } else {
+                System.out.println("=== 非必须依赖条件 ，只执行自己 ===");
                 fire();
             }
+            /**执行下一个*/
             beginNext(threadPoolExecutor, now, timeout);
             return;
         }
@@ -377,7 +387,9 @@ public class WorkerWrapper<T, V> {
         for (DependWrapper dependWrapper : dependWrappers) {
             WorkerWrapper workerWrapper = dependWrapper.getDependWrapper();
             WorkResult tempWorkResult = workerWrapper.getWorkResult();
-            /**校验状态 为 init  或 working，说明他依赖的某个人物还没有执行完毕*/
+            /**校验状态 为 init  或 working，说明他依赖的某个任务还没有执行完毕
+             * 他会等待最后一个任务执行完成走进来，是一个一致性操作。
+             * */
             if (workerWrapper.getState() == INIT || workerWrapper.getState() == WORKING) {
                 existNoFinish = true;
                 break;
@@ -460,4 +472,236 @@ public class WorkerWrapper<T, V> {
         return state.get();
     }
 
+
+    public void setNeedCheckNextWrapperResult(boolean needCheckNextWrapperResult) {
+        this.needCheckNextWrapperResult = needCheckNextWrapperResult;
+    }
+
+    /**
+     * 添加调用链
+     */
+    private void addNext(WorkerWrapper<?, ?> workerWrapper) {
+        if (nextWrappers == null) {
+            nextWrappers = new ArrayList<>();
+
+
+        }
+        /**校验避免重复添加*/
+        for (WorkerWrapper<?, ?> nextWrapper : nextWrappers) {
+            if (workerWrapper.equals(nextWrapper)) {
+                return;
+            }
+        }
+        nextWrappers.add(workerWrapper);
+    }
+
+
+    private void addDepend(WorkerWrapper<?, ?> workerWrapper, boolean must) {
+        addDepend(new DependWrapper(workerWrapper, must));
+    }
+
+    /**
+     * 添加依赖项
+     */
+    private void addDepend(DependWrapper dependWrapper) {
+        if (dependWrappers == null) {
+            dependWrappers = new ArrayList<>();
+        }
+        /**校验避免重复添加*/
+        for (DependWrapper wrapper : dependWrappers) {
+            if (wrapper.equals(dependWrapper)) {
+                return;
+            }
+        }
+        dependWrappers.add(dependWrapper);
+    }
+
+    public List<WorkerWrapper<?, ?>> getNextWrappers() {
+        return nextWrappers;
+    }
+
+    public void setNextWrappers(List<WorkerWrapper<?, ?>> nextWrappers) {
+        this.nextWrappers = nextWrappers;
+    }
+
+
+    /**
+     * 总控制台超时，停止所有任务
+     */
+    public void stopNow() {
+        if (getState() == INIT || getState() == WORKING) {
+            fastFail(getState(), null);
+        }
+    }
+
+
+    public T getParam() {
+        return param;
+    }
+
+    public void setParam(T param) {
+        this.param = param;
+    }
+
+    /**
+     * 创建构造模式
+     */
+    public static class Builder<W, C> {
+
+        /**
+         * 该wrapper的唯一标识[实际业务中可以使用全局唯一业务ID]
+         */
+        private String id = UUID.randomUUID().toString();
+
+        /**
+         * worker的param
+         */
+        private W param;
+
+        /**
+         * 具体要执行的worker
+         */
+        private IWorker<W, C> worker;
+        /**
+         * 具体要执行的回调
+         */
+        private ICallBack<W, C> callback;
+        /**
+         * 自己后面的所有任务
+         */
+        private List<WorkerWrapper<?, ?>> nextWrappers;
+        /**
+         * 自己依赖的所有
+         */
+        private List<DependWrapper> dependWrappers;
+        /**
+         * 存储 强依赖于 自己的 wrapper 集合
+         */
+        private Set<WorkerWrapper<?, ?>> selfIsMustSet;
+
+        /**
+         * 是否需要校验调用链的结果状态 默认需要
+         */
+        private boolean needCheckNextWrapperResult = true;
+
+
+        public Builder<W, C> worker(IWorker<W, C> worker) {
+            this.worker = worker;
+            return this;
+        }
+
+        public Builder<W, C> param(W w) {
+            this.param = w;
+            return this;
+        }
+
+        public Builder<W, C> id(String id) {
+            if (id != null) {
+                this.id = id;
+            }
+            return this;
+        }
+
+        public Builder<W, C> needCheckNextWrapperResult(boolean needCheckNextWrapperResult) {
+            this.needCheckNextWrapperResult = needCheckNextWrapperResult;
+            return this;
+        }
+
+        public Builder<W, C> callback(ICallBack<W, C> callback) {
+            this.callback = callback;
+            return this;
+        }
+
+        /**
+         * 处理依赖项
+         */
+        public Builder<W, C> depend(WorkerWrapper<?, ?>... workerWrappers) {
+
+            if (workerWrappers == null) {
+                return this;
+            }
+            for (WorkerWrapper<?, ?> workerWrapper : workerWrappers) {
+                depend(workerWrapper);
+            }
+            return this;
+        }
+
+        public Builder<W, C> depend(WorkerWrapper<?, ?> wrapper) {
+            return depend(wrapper, true);
+        }
+
+        /**
+         * 处理依赖项
+         *
+         * @param isMust  是否强依赖
+         * @param wrapper
+         */
+        public Builder<W, C> depend(WorkerWrapper<?, ?> wrapper, boolean isMust) {
+            if (wrapper == null) {
+                return this;
+            }
+            DependWrapper dependWrapper = new DependWrapper(wrapper, isMust);
+            if (dependWrappers == null) {
+                dependWrappers = new ArrayList<>();
+            }
+            dependWrappers.add(dependWrapper);
+            return this;
+        }
+
+
+        public Builder<W, C> next(WorkerWrapper<?, ?>... wrappers) {
+            if (wrappers == null) {
+                return this;
+            }
+            for (WorkerWrapper<?, ?> wrapper : wrappers) {
+                next(wrapper);
+            }
+            return this;
+        }
+
+        public Builder<W, C> next(WorkerWrapper<?, ?> wrapper) {
+            return next(wrapper, true);
+        }
+
+        /**
+         * 添加调用链
+         */
+        public Builder<W, C> next(WorkerWrapper<?, ?> wrapper, boolean selfIsMust) {
+            if (nextWrappers == null) {
+                nextWrappers = new ArrayList<>();
+            }
+            nextWrappers.add(wrapper);
+
+            /**校验是否强依赖自己*/
+            if (selfIsMust) {
+                if (selfIsMustSet == null) {
+                    selfIsMustSet = new HashSet<>();
+                }
+                selfIsMustSet.add(wrapper);
+            }
+            return this;
+        }
+
+        public WorkerWrapper<W, C> build() {
+            WorkerWrapper<W, C> wrapper = new WorkerWrapper<>(id, param, worker, callback);
+            wrapper.setNeedCheckNextWrapperResult(needCheckNextWrapperResult);
+            if (dependWrappers != null) {
+                for (DependWrapper dependWrapper : dependWrappers) {
+                    dependWrapper.getDependWrapper().addNext(wrapper);
+                    wrapper.addDepend(dependWrapper);
+                }
+            }
+            if (nextWrappers != null) {
+                for (WorkerWrapper<?, ?> nextWrapper : nextWrappers) {
+                    boolean isMust = false;
+                    if (selfIsMustSet != null && selfIsMustSet.contains(nextWrapper)) {
+                        isMust = true;
+                    }
+                    nextWrapper.addDepend(wrapper, isMust);
+                    wrapper.addNext(nextWrapper);
+                }
+            }
+            return wrapper;
+        }
+    }
 }

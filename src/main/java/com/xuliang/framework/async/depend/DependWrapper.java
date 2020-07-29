@@ -13,6 +13,10 @@ import lombok.Data;
 @Data
 public class DependWrapper {
 
+    public DependWrapper(WorkerWrapper<?, ?> dependWrapper, boolean must) {
+        this.dependWrapper = dependWrapper;
+        this.must = must;
+    }
 
     private WorkerWrapper<?, ?> dependWrapper;
 
