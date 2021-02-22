@@ -22,9 +22,9 @@ public class TestPar {
 //        testMulti5();
 //        testMulti5Reverse();
 //        testMulti6();
-//        testMulti7();
+        testMulti7();
 
-        testMulti8();
+//        testMulti8();
 
     }
 
@@ -157,12 +157,14 @@ public class TestPar {
         WorkerWrapper<String, String> wrapper2 = new WorkerWrapper.Builder<String, String>()
                 .callback(parWorker2)
                 .worker(parWorker2)
+                .name("worker2")
                 .param("2")
                 .build();
 
         WorkerWrapper<String, String> wrapper0 = new WorkerWrapper.Builder<String, String>()
                 .callback(parWorker0)
                 .worker(parWorker0)
+                .name("worker0")
                 .param("0")
                 .build();
 
@@ -171,6 +173,7 @@ public class TestPar {
                 .callback(parWorker1)
                 .worker(parWorker1)
                 .param("1")
+                .name("worker1")
                 .depend(wrapper0)
                 .build();
         long now = SystemClock.now();
@@ -181,9 +184,9 @@ public class TestPar {
 
     /**
      * 0执行完,同时1和2, 1\2都完成后3
-     * 1
+     *      1
      * 0        3
-     * 2
+     *      2
      */
     private static void testMulti3() throws ExecutionException, InterruptedException {
         ParWorker parWorker0 = new ParWorker();
@@ -195,6 +198,7 @@ public class TestPar {
         WorkerWrapper<String, String> wrapper3 = new WorkerWrapper.Builder<String, String>()
                 .callback(parWorker3)
                 .worker(parWorker3)
+                .name("worker3")
                 .param("3")
                 .build();
 
@@ -203,6 +207,7 @@ public class TestPar {
                 .callback(parWorker1)
                 .worker(parWorker1)
                 .next(wrapper3)
+                .name("worker1")
                 .param("1")
                 .build();
 
@@ -211,6 +216,7 @@ public class TestPar {
                 .callback(parWorker2)
                 .worker(parWorker2)
                 .next(wrapper3)
+                .name("worker2")
                 .param("2")
                 .build();
 
@@ -218,6 +224,7 @@ public class TestPar {
                 .callback(parWorker0)
                 .worker(parWorker0)
                 .param("0")
+                .name("worker0")
                 .next(wrapper1, wrapper2)
                 .build();
 
@@ -231,9 +238,9 @@ public class TestPar {
 
     /**
      * 0执行完,同时1和2, 1\2都完成后3
-     * 1
+     *      1
      * 0        3
-     * 2
+     *      2
      */
     private static void testMulti3Reverse() throws ExecutionException, InterruptedException {
         ParWorker parWorker0 = new ParWorker();
@@ -245,6 +252,7 @@ public class TestPar {
         WorkerWrapper<String, String> wrapper0 = new WorkerWrapper.Builder<String, String>()
                 .callback(parWorker0)
                 .worker(parWorker0)
+                .name("worker0")
                 .param("0")
                 .build();
 
@@ -253,6 +261,7 @@ public class TestPar {
                 .callback(parWorker1)
                 .worker(parWorker1)
                 .param("1")
+                .name("worker1")
                 .depend(wrapper0)
                 .build();
 
@@ -261,6 +270,7 @@ public class TestPar {
                 .callback(parWorker2)
                 .worker(parWorker2)
                 .param("2")
+                .name("worker2")
                 .depend(wrapper0)
                 .build();
 
@@ -269,6 +279,7 @@ public class TestPar {
                 .callback(parWorker3)
                 .worker(parWorker3)
                 .param("3")
+                .name("worker3")
                 .depend(wrapper1, wrapper2)
                 .build();
 
@@ -281,9 +292,9 @@ public class TestPar {
 
     /**
      * 0执行完,同时1和2, 1\2都完成后3，2耗时2秒，1耗时1秒。3会等待2完成
-     * 1
+     *      1
      * 0        3
-     * 2
+     *      2
      * <p>
      * 执行结果0，1，2，3
      */
@@ -335,9 +346,9 @@ public class TestPar {
 
     /**
      * 0执行完,同时1和2, 1\2都完成后3，2耗时2秒，1耗时1秒。3会等待2完成
-     * 1
+     *      1
      * 0         3
-     * 2
+     *      2
      * <p>
      * 执行结果0，1，2，3
      */
@@ -392,9 +403,9 @@ public class TestPar {
 
     /**
      * 0执行完,同时1和2, 1\2 任何一个执行完后，都执行3
-     * 1
+     *      1
      * 0            3
-     * 2
+     *      2
      * <p>
      * 则结果是：
      * 0，2，3，1
@@ -415,6 +426,7 @@ public class TestPar {
                 .callback(w3)
                 .worker(w3)
                 .param("3")
+                .name("worker3")
                 .build();
 
 
@@ -422,6 +434,7 @@ public class TestPar {
                 .callback(w1)
                 .worker(w1)
                 .next(wrapper3, false)
+                .name("worker1")
                 .param("1")
                 .build();
 
@@ -429,6 +442,7 @@ public class TestPar {
                 .callback(w2)
                 .worker(w2)
                 .param("2")
+                .name("worker2")
                 .next(wrapper3, false)
                 .build();
 
@@ -436,6 +450,7 @@ public class TestPar {
         WorkerWrapper<String, String> wrapper = new WorkerWrapper.Builder<String, String>()
                 .callback(w)
                 .worker(w)
+                .name("worker0")
                 .param("0")
                 .next(wrapper1, wrapper2)
                 .build();
@@ -451,9 +466,9 @@ public class TestPar {
 
     /**
      * 0执行完,同时1和2, 1\2 任何一个执行完后，都执行3
-     * 1
+     *      1
      * 0        3
-     * 2
+     *      2
      * <p>
      * 则结果是：
      * 0，2，3，1
@@ -511,9 +526,9 @@ public class TestPar {
 
     /**
      * 0执行完,同时1和2, 必须1执行完毕后，才能执行3. 无论2是否领先1完毕，都要等1
-     * 1
+     *      1
      * 0        3
-     * 2
+     *      2
      * <p>
      * 则结果是：
      * 0，2，1，3
@@ -535,6 +550,7 @@ public class TestPar {
         WorkerWrapper<String, String> wrapper3 = new WorkerWrapper.Builder<String, String>()
                 .callback(w3)
                 .worker(w3)
+                .name("worker3")
                 .param("2")
                 .build();
 
@@ -543,12 +559,14 @@ public class TestPar {
                 .callback(w1)
                 .worker(w1)
                 .param("1")
+                .name("worker1")
                 .next(wrapper3)
                 .build();
 
         WorkerWrapper<String, String> wrapper2 = new WorkerWrapper.Builder<String, String>()
                 .callback(w2)
                 .worker(w2)
+                .name("worker2")
                 .param("2")
                 .build();
 
@@ -557,6 +575,7 @@ public class TestPar {
                 .callback(w)
                 .worker(w)
                 .param("0")
+                .name("worker0")
                 .next(wrapper1, wrapper2)
                 .build();
 
@@ -571,11 +590,11 @@ public class TestPar {
 
     /**
      * 两个0并行，上面0执行完,同时1和2, 下面0执行完开始1，上面的 必须1、2执行完毕后，才能执行3. 最后必须2、3都完成，才能4
-     * 1
+     *      1
      * 0            3
-     * 2            4
+     *      2            4
      * ---------
-     * 0   1   2
+     * 0   1        2
      * <p>
      * 则结果是：
      * callback worker0 success--1577242870969----result = 1577242870968---param = 00 from 0-threadName:Thread-1
@@ -599,7 +618,8 @@ public class TestPar {
         WorkerWrapper<String, String> wrapper4 = new WorkerWrapper.Builder<String, String>()
                 .worker(w4)
                 .callback(w4)
-                .param("0")
+                .param("4")
+                .name("worker4")
                 .build();
 
 
@@ -607,20 +627,23 @@ public class TestPar {
                 .worker(w3)
                 .callback(w3)
                 .next(wrapper4)
-                .param("0")
+                .name("worker3")
+                .param("3")
                 .build();
 
         WorkerWrapper<String, String> wrapper1 = new WorkerWrapper.Builder<String, String>()
                 .worker(w1)
                 .callback(w1)
-                .param("0")
+                .param("1")
                 .next(wrapper3)
+                .name("worker1")
                 .build();
 
         WorkerWrapper<String, String> wrapper2 = new WorkerWrapper.Builder<String, String>()
                 .worker(w2)
                 .callback(w2)
-                .param("0")
+                .param("2")
+                .name("worker2")
                 .next(wrapper3)
                 .build();
 
@@ -629,6 +652,7 @@ public class TestPar {
                 .worker(w)
                 .callback(w)
                 .param("0")
+                .name("worker0")
                 .next(wrapper1, wrapper2)
                 .build();
 
@@ -636,14 +660,16 @@ public class TestPar {
         WorkerWrapper<String, String> wrapper02 = new WorkerWrapper.Builder<String, String>()
                 .worker(w2)
                 .callback(w2)
-                .param("0")
+                .name("worker02")
+                .param("02")
                 .next(wrapper4)
                 .build();
 
         WorkerWrapper<String, String> wrapper01 = new WorkerWrapper.Builder<String, String>()
                 .worker(w1)
                 .callback(w1)
-                .param("0")
+                .name("worker01")
+                .param("01")
                 .next(wrapper02)
                 .build();
 
@@ -651,7 +677,8 @@ public class TestPar {
         WorkerWrapper<String, String> wrapper00 = new WorkerWrapper.Builder<String, String>()
                 .worker(w)
                 .callback(w)
-                .param("0")
+                .name("worker00")
+                .param("00")
                 .next(wrapper01)
                 .build();
         long now = SystemClock.now();
